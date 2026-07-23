@@ -3,4 +3,4 @@ python-dotenv
 requests
 aiohttp
 flask
-google-generativeai
+google-genai
