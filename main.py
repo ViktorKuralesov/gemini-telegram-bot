@@ -38,6 +38,12 @@ def handle_message(message):
         bot.reply_to(message, f"Произошла ошибка при обращении к нейросети: {e}")
 
 if __name__ == "__main__":
+    # Принудительно сбрасываем старый вебхук перед стартом
+    try:
+        bot.remove_webhook()
+    except Exception:
+        pass
+        
     t = Thread(target=run_flask)
     t.start()
     bot.infinity_polling()
