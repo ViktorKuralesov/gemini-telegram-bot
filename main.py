@@ -3,7 +3,7 @@ import telebot
 from dotenv import load_dotenv
 from flask import Flask
 from threading import Thread
-import google.generativeai as genai
+from google import genai
 
 load_dotenv()
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -11,9 +11,8 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 bot = telebot.TeleBot(TOKEN)
 
-# Настройка Gemini
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-pro')
+# Настройка нового клиента Gemini
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 app = Flask(__name__)
 
@@ -32,8 +31,11 @@ def send_welcome(message):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     try:
-        # Отправляем запрос к Gemini
-        response = model.generate_content(message.text)
+        # Используем актуальный метод генерации
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=message.text,
+        )
         bot.reply_to(message, response.text)
     except Exception as e:
         bot.reply_to(message, f"Произошла ошибка при обращении к нейросети: {e}")
