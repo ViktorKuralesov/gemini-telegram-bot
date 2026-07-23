@@ -83,4 +83,7 @@ def handle_photo(message):
     bot.reply_to(message, response_text)
 
 if __name__ == '__main__':
-    bot.infinity_polling()
+    # Получаем порт от Render
+    port = int(os.environ.get("PORT", 10000))
+    # Запускаем Flask-приложение или сервер
+    app.run(host="0.0.0.0", port=port)
