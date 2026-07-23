@@ -10,8 +10,6 @@ TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 bot = telebot.TeleBot(TOKEN)
-
-# Настройка нового клиента Gemini
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 app = Flask(__name__)
@@ -31,7 +29,6 @@ def send_welcome(message):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     try:
-        # Используем актуальный метод генерации
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=message.text,
