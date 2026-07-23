@@ -37,8 +37,7 @@ def handle_message(message):
         response = client.models.generate_content(
             model='gemini-2.0-flash',
             contents=message.text,
-            bot.reply_to(message, response.text)
-
+        )
         bot.reply_to(message, response.text)
     except Exception as e:
         bot.reply_to(message, f"Произошла ошибка при обращении к нейросети: {e}")
