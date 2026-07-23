@@ -38,10 +38,10 @@ def handle_message(message):
             model='gemini-2.0-flash',
             contents=message.text,
         )
-        bot.reply_to(message, response.text) 
+        bot.reply_to(message, response.text)
     except Exception as e:
-        bot.reply_to(message, f"Пизда рулю пацаны. Кина не будет: {e}")
-
+        # Ошибка теперь пишется только в консоль Render, а не в чат пользователю
+        print(f"Ошибка при обращении к Gemini API: {e}")
 if __name__ == "__main__":
     # Получаем внешний URL вашего сервиса на Render
     RENDER_EXTERNAL_URL = os.getenv('RENDER_EXTERNAL_URL')
