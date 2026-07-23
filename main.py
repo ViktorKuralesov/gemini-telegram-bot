@@ -5,7 +5,7 @@ import asyncio
 import telebot
 from dotenv import load_dotenv
 from threading import Thread
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from flask import Flask
 
 # 1. Веб-сервер для проверки статуса на Render (чтобы хостинг не усыплял бота)
 class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -83,7 +83,5 @@ def handle_photo(message):
     bot.reply_to(message, response_text)
 
 if __name__ == '__main__':
-    # Получаем порт от Render
     port = int(os.environ.get("PORT", 10000))
-    # Запускаем Flask-приложение или сервер
     app.run(host="0.0.0.0", port=port)
