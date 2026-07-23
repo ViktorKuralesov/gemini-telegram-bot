@@ -34,10 +34,10 @@ def send_welcome(message):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     try:
-       response = client.models.generate_content(
-    model='gemini-2.0-flash',  # на вот это
-    contents=message.text,
-       ) 
+        response = client.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=message.text,
+        )
         bot.reply_to(message, response.text)
     except Exception as e:
         bot.reply_to(message, f"Произошла ошибка при обращении к нейросети: {e}")
