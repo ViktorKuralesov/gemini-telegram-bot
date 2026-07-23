@@ -36,7 +36,8 @@ def handle_message(message):
     try:
         response = client.models.generate_content(
             model='gemini-2.0-flash',
-            contents=message.text,)
+            contents=message.text,
+        )
         
     bot.reply_to(message, response.text)
     except Exception as e:
