@@ -30,7 +30,7 @@ bot = telebot.TeleBot(TOKEN)
 
 # 3. Прямое обращение к Google Gemini API
 async def ask_gemini(prompt, image_bytes=None):
-url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"    
+url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={API_KEY}"    
     
     parts = []
     if image_bytes:
