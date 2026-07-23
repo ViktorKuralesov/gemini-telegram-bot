@@ -38,8 +38,7 @@ def handle_message(message):
             model='gemini-2.0-flash',
             contents=message.text,
         )
-        
-    bot.reply_to(message, response.text)
+        bot.reply_to(message, response.text)  # <--- Перенесите сюда (с отступом)
     except Exception as e:
         bot.reply_to(message, f"Пизда рулю пацаны. Кина не будет: {e}")
 
