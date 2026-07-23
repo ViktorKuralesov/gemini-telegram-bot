@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# 1. Веб-сервер для проверки статуса на Render (Health Check)
+# 1. Веб-сервер для проверки статуса на Render
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -21,14 +21,14 @@ def run_health_check():
 
 Thread(target=run_health_check, daemon=True).start()
 
-# 2. Инициализация переменных окружения
+# 2. Переменные окружения
 load_dotenv()
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 API_KEY = os.getenv('GEMINI_API_KEY') or os.getenv('API_KEY')
 
 bot = telebot.TeleBot(TOKEN)
 
-# 3. Прямое обращение к Google Gemini API
+# 3. Запрос к Gemini API
 async def ask_gemini(prompt, image_bytes=None):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={API_KEY}"
     
@@ -43,7 +43,6 @@ async def ask_gemini(prompt, image_bytes=None):
         })
     
     parts.append({"text": prompt or "Что изображено на этом фото?"})
-
     payload = {"contents": [{"parts": parts}]}
 
     async with aiohttp.ClientSession() as session:
@@ -53,14 +52,19 @@ async def ask_gemini(prompt, image_bytes=None):
                 try:
                     return data['candidates'][0]['content']['parts'][0]['text']
                 except (KeyError, IndexError):
-                    return "Ошибка: не удалось прочитать ответ от Gemini."
+                    return None
             else:
-                err = await resp.text()
-                return f"Ошибка Gemini API ({resp.status}). Проверьте ваш API-ключ."
+                # Если произошла ошибка (например, 429), логируем в консоль, а пользователю НЕ спамим
+                print(f"Gemini API Error: Status {resp.status}")
+                return None
 
-# 4. Обработка входящих сообщений Telegram
+# 4. Обработка сообщений Telegram
 @bot.message_handler(content_types=['text', 'photo'])
 def handle_message(message):
+    # Игнорируем собственные ошибки бота, чтобы исключить зацикливание
+    if message.text and "Ошибка Gemini API" in message.text:
+        return
+
     bot.send_chat_action(message.chat.id, 'typing')
     
     prompt = message.caption if message.content_type == 'photo' else message.text
@@ -73,12 +77,13 @@ def handle_message(message):
     async def process():
         response_text = await ask_gemini(prompt, image_bytes)
         
-        # Отправка ответа пользователю с поддержкой длинных сообщений
-        for chunk in [response_text[i:i+4000] for i in range(0, len(response_text), 4000)]:
-            try:
-                bot.send_message(message.chat.id, chunk, parse_mode='Markdown')
-            except Exception:
-                bot.send_message(message.chat.id, chunk)
+        # Если ответ от Gemini получён — отправляем его
+        if response_text:
+            for chunk in [response_text[i:i+4000] for i in range(0, len(response_text), 4000)]:
+                try:
+                    bot.send_message(message.chat.id, chunk, parse_mode='Markdown')
+                except Exception:
+                    bot.send_message(message.chat.id, chunk)
 
     asyncio.run(process())
 
