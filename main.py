@@ -1,5 +1,5 @@
 import os
-import re
+import base64
 import aiohttp
 import asyncio
 import telebot
@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
+# 1. Веб-сервер для проверки статуса на Render (Health Check)
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -17,113 +18,69 @@ def run_health_check():
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
     server.serve_forever()
-    Thread(target=run_health_check, daemon=True).start()
-# Load environment variables from .env file
-load_dotenv()
 
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')  # Replace with your token from BotFather
-BASE_API_URL = os.getenv('BASE_API_URL')  # Base URL for the API
-API_KEY = os.getenv('API_KEY')
+Thread(target=run_health_check, daemon=True).start()
+
+# 2. Инициализация переменных окружения
+load_dotenv()
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+API_KEY = os.getenv('GEMINI_API_KEY') or os.getenv('API_KEY')
 
 bot = telebot.TeleBot(TOKEN)
 
-
-def escape_markdown(text):
-    # First, replace literal '\n' with actual newline characters
-    text = text.replace('\\n', '\n')
-
-    # Escape Markdown special characters except for newline characters
-    markdown_chars = r'[\*_\[\]()~`>#\+\-=|{}\.!]'
-    escaped_text = re.sub(markdown_chars, lambda m: '\\' + m.group(0), text)
-
-    return escaped_text
-
-
-# Async function to handle API requests
-async def handle_api_request(message, delete=False, image_url=None):
-    user_id = str(message.from_user.id)
-    message_id = str(message.message_id)
-
-    headers = {
-        'Content-Type': 'application/json',
-        'x-api-key': API_KEY
-    }
-    async with aiohttp.ClientSession() as session:
-        if delete:
-            # Send DELETE request
-            async with session.delete(f"{BASE_API_URL}/delete/{user_id}", headers=headers) as response:
-                yield "Conversation deleted." if response.status == 200 else "Error in deletion."
-        else:
-            # Determine if the message is a text or photo with caption
-            query_text = message.caption if message.content_type == 'photo' else message.text
-
-            if image_url and query_text == "" or query_text is None:
-                query_text = "What insights can you provide about this image?"
-
-            data = {
-                "message_id": message_id,
-                "query": query_text,
+# 3. Прямое обращение к Google Gemini API
+async def ask_gemini(prompt, image_bytes=None):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+    
+    parts = []
+    if image_bytes:
+        encoded_image = base64.b64encode(image_bytes).decode('utf-8')
+        parts.append({
+            "inline_data": {
+                "mime_type": "image/jpeg",
+                "data": encoded_image
             }
-            if image_url:  # Add image information if available
-                data["image"] = True
-                data["image_url"] = image_url
+        })
+    
+    parts.append({"text": prompt or "Что изображено на этом фото?"})
 
-            async with session.post(f"{BASE_API_URL}/conversations/{user_id}", headers=headers, json=data) as response:
-                if response.status == 200:
-                    async for line in response.content.iter_any():
-                        decoded_line = line.decode('utf-8').strip()
-                        if decoded_line:
-                            yield decoded_line
-                else:
-                    yield "Sorry, there was an error processing your request."
+    payload = {"contents": [{"parts": parts}]}
 
-
-# Function to handle incoming messages
-@bot.message_handler(content_types=['text', 'photo'])
-def handle_text(message):
-    # Detect if the message is a delete message command
-    delete_command = message.text.strip() in ['/delete', '/clear'] if message.text else False
-
-    # Determine if the message contains an image and/or caption
-    image_url = None
-    if message.content_type == 'photo':
-        # Get file information of the largest size image
-        file_info = bot.get_file(message.photo[-1].file_id)
-        image_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
-
-    # Asynchronously process the response
-    async def process_response():
-        last_chunk_received = False
-        message_to_update = None
-        full_response_text = ""  # Initialize an empty string to store the full response
-
-        async for response in handle_api_request(message, delete=delete_command, image_url=image_url):
-            # Append the new chunk to the full response
-            formatted_response = escape_markdown(response)
-            full_response_text += formatted_response if full_response_text else formatted_response
-
-            if message_to_update:
-                # Update the message with the concatenated text
-                bot.edit_message_text(chat_id=message.chat.id,
-                                      message_id=message_to_update.message_id,
-                                      text=full_response_text,
-                                      parse_mode='MarkdownV2',
-                                      disable_web_page_preview=True)
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=payload) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                try:
+                    return data['candidates'][0]['content']['parts'][0]['text']
+                except (KeyError, IndexError):
+                    return "Ошибка: не удалось прочитать ответ от Gemini."
             else:
-                # Send the first chunk as a new message
-                message_to_update = bot.send_message(message.chat.id,
-                                                     full_response_text,
-                                                     parse_mode='MarkdownV2',
-                                                     disable_web_page_preview=True)
+                err = await resp.text()
+                return f"Ошибка Gemini API ({resp.status}). Проверьте ваш API-ключ."
 
-            if not last_chunk_received:
-                bot.send_chat_action(message.chat.id, 'typing')
-                last_chunk_received = True
-
-    # Show 'typing' action initially
+# 4. Обработка входящих сообщений Telegram
+@bot.message_handler(content_types=['text', 'photo'])
+def handle_message(message):
     bot.send_chat_action(message.chat.id, 'typing')
-    asyncio.run(process_response())
+    
+    prompt = message.caption if message.content_type == 'photo' else message.text
+    image_bytes = None
 
+    if message.content_type == 'photo':
+        file_info = bot.get_file(message.photo[-1].file_id)
+        image_bytes = bot.download_file(file_info.file_path)
+
+    async def process():
+        response_text = await ask_gemini(prompt, image_bytes)
+        
+        # Отправка ответа пользователю с поддержкой длинных сообщений
+        for chunk in [response_text[i:i+4000] for i in range(0, len(response_text), 4000)]:
+            try:
+                bot.send_message(message.chat.id, chunk, parse_mode='Markdown')
+            except Exception:
+                bot.send_message(message.chat.id, chunk)
+
+    asyncio.run(process())
 
 if __name__ == '__main__':
     print("Bot started")
