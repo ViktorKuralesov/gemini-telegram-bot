@@ -41,7 +41,7 @@ def handle_message(message):
         
     bot.reply_to(message, response.text)
     except Exception as e:
-        bot.reply_to(message, f"Произошла ошибка при обращении к нейросети: {e}")
+        bot.reply_to(message, f"Пизда рулю пацаны. Кина не будет: {e}")
 
 if __name__ == "__main__":
     # Получаем внешний URL вашего сервиса на Render
