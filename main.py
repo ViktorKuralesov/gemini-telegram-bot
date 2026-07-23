@@ -1,8 +1,7 @@
 import os
 import telebot
 from dotenv import load_dotenv
-from flask import Flask
-from threading import Thread
+from flask import Flask, request
 from google import genai
 
 load_dotenv()
@@ -11,16 +10,22 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 bot = telebot.TeleBot(TOKEN)
 client = genai.Client(api_key=GEMINI_API_KEY)
-
 app = Flask(__name__)
 
 @app.route('/')
 def home():
     return "Bot is running!"
 
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+# Роут, на который Telegram будет присылать сообщения
+@app.route(f'/{TOKEN}', methods=['POST'])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return "!", 200
+    else:
+        return "Forbidden", 403
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -38,12 +43,12 @@ def handle_message(message):
         bot.reply_to(message, f"Произошла ошибка при обращении к нейросети: {e}")
 
 if __name__ == "__main__":
-    # Принудительно сбрасываем старый вебхук перед стартом
-    try:
+    # Получаем внешний URL вашего сервиса на Render
+    RENDER_EXTERNAL_URL = os.getenv('RENDER_EXTERNAL_URL')
+    
+    if RENDER_EXTERNAL_URL:
         bot.remove_webhook()
-    except Exception:
-        pass
-        
-    t = Thread(target=run_flask)
-    t.start()
-    bot.infinity_polling()
+        bot.set_webhook(url=f"{RENDER_EXTERNAL_URL}/{TOKEN}")
+    
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
